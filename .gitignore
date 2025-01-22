@@ -1,0 +1,6 @@
+*.pyc
+*.pyo
+backend/__pycache__/
+venv/
+.vscode/
+*.log
