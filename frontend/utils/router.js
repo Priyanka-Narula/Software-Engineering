@@ -8,6 +8,7 @@ import Student_Registration_Page from "../pages/Student_Registration_Page.js"
 import Admin_Dashboard from "../pages/Admin_Dashboard.js"
 import Instructor_Dashboard from "../pages/Instructor_Dashboard.js"
 import Student_Dashboard from "../pages/Student_Dashboard.js"
+import Instructor_Registration_Page from "../pages/Instructor_Registration_Page.js"
 
 
 const routes = [
@@ -17,12 +18,14 @@ const routes = [
     { path: '/admin_dashboard', component: Admin_Dashboard , name:'Admin_Dashboard'}, 
     { path: '/instructor_dashboard', component: Instructor_Dashboard , name:'Instructor_Dashboard'}, 
     { path: '/student_dashboard', component: Student_Dashboard , name:'Student_Dashboard'}, 
+    { path: '/instructor_registration_page', component: Instructor_Registration_Page , name:'Instructor_Registration_Page'}, 
     
    
     
 ]
 
 const router = new VueRouter({
+    // mode: 'history',
     routes
 })
 

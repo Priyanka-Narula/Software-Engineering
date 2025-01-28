@@ -52,5 +52,6 @@ class CourseOpted(db.Model):
     __tablename__ = 'course_opted'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=True)
     term = db.Column(db.String(50), nullable=True)
     status = db.Column(db.Boolean, default=True)

@@ -8,6 +8,7 @@ router.beforeEach((to, from, next) => {
         to.name !== 'Home' &&
         to.name !== 'Login' &&
         to.name !== 'Student_Registration_Page' &&
+        to.name !== 'Instructor_Registration_Page' &&
       
         !isAuthenticated
     ) {

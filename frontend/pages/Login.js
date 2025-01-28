@@ -40,6 +40,7 @@ export default {
               localStorage.setItem('auth_token',data.token)
               localStorage.setItem('role',data.role)
               localStorage.setItem('email',data.email)
+              localStorage.setItem('user_name',data.name)
               
               if (data.role === 'student') {
                 this.$router.push({ path: '/student_dashboard' });

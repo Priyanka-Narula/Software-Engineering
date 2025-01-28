@@ -18,11 +18,19 @@ export default{
           </li>
           
           <li class="nav-item">
-            <router-link class="nav-link active" v-if="!is_loged_in" to="/student_registration_page">Registration</router-link>
+            <router-link class="nav-link active" v-if="!is_loged_in" to="/student_registration_page">Student_Registration</router-link>
+          </li>
+
+          <li class="nav-item">
+            <router-link class="nav-link active" v-if="!is_loged_in" to="/instructor_registration_page">Instructor_Registration</router-link>
           </li>
           
           <li class="nav-item active" v-if="is_loged_in">
             <button class="nav-link active" @click="logout">Logout</button>
+          </li>
+
+          <li class="nav-item active" v-if="is_loged_in">
+            <button class="nav-link active">Welcome, {{ user_name }}</button>
           </li>
         
           
@@ -36,7 +44,8 @@ data(){
   return{
     role:localStorage.getItem('role'),
     is_loged_in:localStorage.getItem('auth_token'),
-    email:localStorage.getItem('email')
+    email:localStorage.getItem('email'),
+    user_name:localStorage.getItem('user_name'),
   }
 },
 methods:{
@@ -44,6 +53,7 @@ methods:{
     localStorage.removeItem('auth_token')
     localStorage.removeItem('role')
     localStorage.removeItem('email')
+    localStorage.removeItem('user_name')
     this.$router.push({path:'/'})
   },
 },
