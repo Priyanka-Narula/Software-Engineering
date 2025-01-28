@@ -8,7 +8,7 @@ from backend.model import *
 
 api = Api(prefix='/api')
 
-
+# Admin can Add , Edit and Update course info | Like course name , credit , assign instructor
 class Admin_Course_API(Resource):
     
     post_parser = reqparse.RequestParser()
@@ -117,8 +117,7 @@ class Admin_Course_API(Resource):
     
 
 # Course Registration 
-
-class CourseRegistrationAPI(Resource):
+class Course_Registration_API(Resource):
     
     post_parser = reqparse.RequestParser()
     post_parser.add_argument('course_ids', type=list, required=True, help="List of course IDs to register for", location='json')
@@ -161,8 +160,8 @@ class CourseRegistrationAPI(Resource):
         return {"message": "Courses registered successfully."}, 201
     
 
-# Getting the course Details for the user 
 
+# Displays couses on the User_Dahboard
 class User_Course_API(Resource):
 
     @auth_required("token")
@@ -190,8 +189,7 @@ class User_Course_API(Resource):
         else:
             return {"message": "No courses found"}, 404
         
-# CourseContent 
-
+# Instructor can Add , View content | One instructor one course
 class Instructor_Course_API(Resource):
 
     @auth_required("token")  # Ensure the user is authenticated
@@ -286,7 +284,7 @@ class Instructor_Course_API(Resource):
 
 
 
-api.add_resource(Admin_Course_API, '/admin_course')                         # Admin can Add , Edit and Update
-api.add_resource(CourseRegistrationAPI, '/courseregistration')  # User can register for the courses
+api.add_resource(Admin_Course_API, '/admin_course')                         # Admin can Add , Edit and Update course info
+api.add_resource(Course_Registration_API, '/course_registration')  # User can register for the courses
 api.add_resource(User_Course_API, '/user_course')                # Displays user Courses along with ID
-api.add_resource(Instructor_Course_API, '/instructor_course')            # Instructor can Add , View content 
+api.add_resource(Instructor_Course_API, '/instructor_course')            # Instructor can Add , View content | One instructor one course
