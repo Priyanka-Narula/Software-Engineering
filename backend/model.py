@@ -30,14 +30,15 @@ class UserRoles(db.Model):
 class Instructor(db.Model):
     __tablename__ = 'instructor'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
+    #name = db.Column(db.String(100), nullable=False)
+    instructor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
 
 class Course(db.Model):
     __tablename__ = 'course'
     id = db.Column(db.Integer, primary_key=True)
     course_name = db.Column(db.String(100), nullable=False)
-    instructor_id = db.Column(db.Integer, db.ForeignKey('instructor.id'), nullable=True)
+    instructor_id = db.Column(db.Integer, db.ForeignKey('instructor.instructor_id'), nullable=True)
     credits = db.Column(db.Integer)
 
 class CourseContent(db.Model):
@@ -46,7 +47,7 @@ class CourseContent(db.Model):
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
     lecture_no = db.Column(db.String(50), nullable=False)
     lecture_url = db.Column(db.String(255))
-    instructor_id = db.Column(db.Integer, db.ForeignKey('instructor.id'), nullable=True)
+    instructor_id = db.Column(db.Integer, db.ForeignKey('instructor.instructor_id'), nullable=True)
 
 class CourseOpted(db.Model):
     __tablename__ = 'course_opted'

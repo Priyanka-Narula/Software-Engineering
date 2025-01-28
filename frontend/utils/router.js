@@ -10,7 +10,6 @@ import Instructor_Dashboard from "../pages/Instructor_Dashboard.js"
 import Student_Dashboard from "../pages/Student_Dashboard.js"
 import Instructor_Registration_Page from "../pages/Instructor_Registration_Page.js"
 
-
 const routes = [
     { path: '/', component: Home,name: 'Home' },
     { path: '/login', component: Login , name:'Login'}, 

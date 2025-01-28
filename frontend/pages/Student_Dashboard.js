@@ -37,7 +37,7 @@ export default {
 
     methods: {
         async get_usercourses() {
-            const res = await fetch('/api/usercourses', {
+            const res = await fetch('/api/user_course', {
                 method: 'GET',
                 headers: {
                     "Authentication-Token": this.auth_token,
@@ -52,25 +52,25 @@ export default {
             }
         },
 
-        async get_notifications() {
-            const res = await fetch('/api/notifications', {
-                method: 'GET',
-                headers: {
-                    "Authentication-Token": this.auth_token,
-                    'Content-Type': 'application/json',
-                },
-            });
-            const data = await res.json();
-            if (res.ok) {
-                this.notifications = data;
-            } else {
-                alert(data.message);
-            }
-        },
+        // async get_notifications() {
+        //     const res = await fetch('/api/notifications', {
+        //         method: 'GET',
+        //         headers: {
+        //             "Authentication-Token": this.auth_token,
+        //             'Content-Type': 'application/json',
+        //         },
+        //     });
+        //     const data = await res.json();
+        //     if (res.ok) {
+        //         this.notifications = data;
+        //     } else {
+        //         alert(data.message);
+        //     }
+        // },
     },
 
     async mounted() {
         await this.get_usercourses();
-        await this.get_notifications();
+        //await this.get_notifications();
     },
 };

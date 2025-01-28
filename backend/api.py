@@ -9,11 +9,12 @@ from backend.model import *
 api = Api(prefix='/api')
 
 
-class CourseAPI(Resource):
+class Admin_Course_API(Resource):
     
     post_parser = reqparse.RequestParser()
     post_parser.add_argument('course_name', type=str, required=True, help="Course name is required")
     post_parser.add_argument('credits', type=int, required=True, help="Credits are required")
+    #post_parser.add_argument('instructor_id', type=int, required=True, help="Instructor ID is required")
 
     # @auth_required("token") 
     # @roles_required("admin")
@@ -30,7 +31,8 @@ class CourseAPI(Resource):
 
         new_course = Course(
             course_name=course_name,
-            credits=credits
+            credits=credits #,
+            #instructor_id = args['instructor_id']
         )
 
         db.session.add(new_course)
@@ -161,7 +163,7 @@ class CourseRegistrationAPI(Resource):
 
 # Getting the course Details for the user 
 
-class UserCoursesAPI(Resource):
+class User_Course_API(Resource):
 
     @auth_required("token")
     @roles_required("student")
@@ -188,7 +190,103 @@ class UserCoursesAPI(Resource):
         else:
             return {"message": "No courses found"}, 404
         
+# CourseContent 
 
-api.add_resource(CourseAPI, '/courses')
-api.add_resource(CourseRegistrationAPI, '/courseregistration')
-api.add_resource(UserCoursesAPI, '/usercourses')
+class Instructor_Course_API(Resource):
+
+    @auth_required("token")  # Ensure the user is authenticated
+    def get(self):
+        current_instructor = current_user  # Get the current logged-in user
+
+        # Fetch the courses where the instructor is assigned
+        courses = Course.query.filter_by(instructor_id=current_instructor.id).all()
+        
+        if not courses:
+            return {"message": "You are not assigned to any courses."}, 404
+
+        # Prepare response with course content grouped by week and lecture
+        course_data = []
+        for course in courses:
+            # Retrieve course content for the specific course
+            course_content = CourseContent.query.filter_by(course_id=course.id).all()
+            
+            if not course_content:
+                course_data.append({
+                    "course_name": course.course_name,
+                    "message": "No content available"
+                })
+            else:
+                # Group lectures by weeks
+                content_by_week = {}
+                for content in course_content:
+                    week_no, lecture_no = map(int, content.lecture_no.split('.'))
+                    if week_no not in content_by_week:
+                        content_by_week[week_no] = []
+                    content_by_week[week_no].append({
+                        "lecture_no": lecture_no,
+                        "lecture_url": content.lecture_url
+                    })
+
+                # Convert the grouped data into a structured list
+                structured_content = []
+                for week_no in sorted(content_by_week.keys()):
+                    structured_content.append({
+                        "week": week_no,
+                        "lectures": sorted(content_by_week[week_no], key=lambda x: x["lecture_no"])
+                    })
+
+                course_data.append({
+                    "course_name": course.course_name,
+                    "course_content": structured_content
+                    
+                })
+                #print(course.course_name)
+                #print(structured_content)
+            
+        return {"courses": course_data}, 200
+
+    @auth_required("token")  # Ensure the user is authenticated
+    def post(self):
+        current_instructor = current_user  # Get the current logged-in user
+        data = request.get_json()
+
+        # Validate payload
+        if not data or "content" not in data:
+            return {"message": "Invalid or missing content data."}, 400
+
+        # Fetch the instructor's assigned course
+        assigned_course = Course.query.filter_by(instructor_id=current_instructor.id).first()
+
+        if not assigned_course:
+            return {"message": "You are not authorized to add content to any courses."}, 403
+
+        # Process and add the content
+        content_list = data["content"]
+        if not isinstance(content_list, list) or len(content_list) == 0:
+            return {"message": "Content data should be a non-empty list."}, 400
+
+        # Clear existing content for the course
+        CourseContent.query.filter_by(course_id=assigned_course.id).delete()
+
+        # Insert new content
+        for entry in content_list:
+            if "lecture_no" not in entry or "lecture_url" not in entry:
+                return {"message": "Each content entry must include lecture_no and lecture_url."}, 400
+
+            new_content = CourseContent(
+                course_id=assigned_course.id,
+                lecture_no=entry["lecture_no"],
+                lecture_url=entry["lecture_url"],
+                instructor_id=current_instructor.id
+            )
+            db.session.add(new_content)
+
+        db.session.commit()
+        return {"message": "Course content updated successfully!"}, 201
+
+
+
+api.add_resource(Admin_Course_API, '/admin_course')                         # Admin can Add , Edit and Update
+api.add_resource(CourseRegistrationAPI, '/courseregistration')  # User can register for the courses
+api.add_resource(User_Course_API, '/user_course')                # Displays user Courses along with ID
+api.add_resource(Instructor_Course_API, '/instructor_course')            # Instructor can Add , View content 
