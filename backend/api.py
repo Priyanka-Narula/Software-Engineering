@@ -8,6 +8,7 @@ from backend.model import *
 
 api = Api(prefix='/api')
 
+
 # Admin can Add , Edit and Update course info | Like course name , credit , assign instructor
 class Admin_Course_API(Resource):
     
@@ -105,6 +106,8 @@ class Admin_Course_API(Resource):
             course.instructor_id = instructor_id
 
         db.session.commit()
+
+        # Assign instructor to instructor table
         return {
             "message": "Course updated successfully",
             "course": {
@@ -160,7 +163,6 @@ class Course_Registration_API(Resource):
         return {"message": "Courses registered successfully."}, 201
     
 
-
 # Displays couses on the User_Dahboard
 class User_Course_API(Resource):
 
@@ -188,91 +190,119 @@ class User_Course_API(Resource):
             return courses, 200
         else:
             return {"message": "No courses found"}, 404
-        
-# Instructor can Add , View content | One instructor one course
-class Instructor_Course_API(Resource):
 
-    @auth_required("token")  # Ensure the user is authenticated
+
+
+# Get course content for a specefic course
+class Course_Details_API(Resource):
+    
+    def get(self, course_id):
+        course = Course.query.get(course_id)
+        print(course_id)
+        if not course:
+            return {"message": "Course not found."}, 404
+
+        # Get course content
+        course_content = CourseContent.query.filter_by(course_id=course_id).all()
+
+        # Get instructor info
+        instructor = Instructor.query.filter_by(course_id=course_id).first()
+        if instructor:
+            instructor_name = User.query.get(instructor.instructor_id).name
+        else:
+            instructor_name = "Unknown"
+
+        return {
+            "course": {
+                "course_name": course.course_name,
+                "credits": course.credits,
+            },
+            "content": [{"lecture_no": content.lecture_no, "lecture_url": content.lecture_url} for content in course_content],
+            "instructor_name": instructor_name,
+        }, 200
+
+
+class Instructor_Assigned_Course_API(Resource):
+    
+    @auth_required("token")
     def get(self):
-        current_instructor = current_user  # Get the current logged-in user
+        instructor = current_user  # Get the current logged-in instructor
 
-        # Fetch the courses where the instructor is assigned
-        courses = Course.query.filter_by(instructor_id=current_instructor.id).all()
-        
+        # Fetch all courses assigned to the instructor
+        courses = Course.query.filter_by(instructor_id=instructor.id).all()
+
         if not courses:
             return {"message": "You are not assigned to any courses."}, 404
 
-        # Prepare response with course content grouped by week and lecture
-        course_data = []
-        for course in courses:
-            # Retrieve course content for the specific course
-            course_content = CourseContent.query.filter_by(course_id=course.id).all()
-            
-            if not course_content:
-                course_data.append({
-                    "course_name": course.course_name,
-                    "message": "No content available"
-                })
-            else:
-                # Group lectures by weeks
-                content_by_week = {}
-                for content in course_content:
-                    week_no, lecture_no = map(int, content.lecture_no.split('.'))
-                    if week_no not in content_by_week:
-                        content_by_week[week_no] = []
-                    content_by_week[week_no].append({
-                        "lecture_no": lecture_no,
-                        "lecture_url": content.lecture_url
-                    })
+        # Format the response
+        all_courses = [
+            {
+                "course_id": course.id,
+                "course_name": course.course_name,
+                "instructor_id": course.instructor_id,
+                "credits": course.credits
+            }
+            for course in courses
+        ]
+        print(all_courses)
+        return all_courses, 200
 
-                # Convert the grouped data into a structured list
-                structured_content = []
-                for week_no in sorted(content_by_week.keys()):
-                    structured_content.append({
-                        "week": week_no,
-                        "lectures": sorted(content_by_week[week_no], key=lambda x: x["lecture_no"])
-                    })
 
-                course_data.append({
-                    "course_name": course.course_name,
-                    "course_content": structured_content
-                    
-                })
-                #print(course.course_name)
-                #print(structured_content)
-            
-        return {"courses": course_data}, 200
+# Get | Post -> Course_Content
+class Instructor_Course_Content_API(Resource):
+    @auth_required("token")
+    def get(self, course_id):
+        current_instructor = current_user
+        course = Course.query.filter_by(id=course_id, instructor_id=current_instructor.id).first()
 
-    @auth_required("token")  # Ensure the user is authenticated
-    def post(self):
-        current_instructor = current_user  # Get the current logged-in user
+        if not course:
+            return {"message": "Course not found or you are not authorized."}, 404
+
+        course_content = CourseContent.query.filter_by(course_id=course_id).all()
+
+        content_by_week = {}
+        for content in course_content:
+            week_no, lecture_no = map(int, content.lecture_no.split('.'))
+            if week_no not in content_by_week:
+                content_by_week[week_no] = []
+            content_by_week[week_no].append({
+                "lecture_no": lecture_no,
+                "lecture_url": content.lecture_url
+            })
+
+        structured_content = [
+            {"week": week_no, "lectures": sorted(content_by_week[week_no], key=lambda x: x["lecture_no"])}
+            for week_no in sorted(content_by_week.keys())
+        ]
+
+        return {"course_content": structured_content}, 200
+
+    @auth_required("token")
+    def post(self, course_id):
+        current_instructor = current_user
         data = request.get_json()
 
-        # Validate payload
         if not data or "content" not in data:
             return {"message": "Invalid or missing content data."}, 400
 
-        # Fetch the instructor's assigned course
-        assigned_course = Course.query.filter_by(instructor_id=current_instructor.id).first()
+        course = Course.query.filter_by(id=course_id, instructor_id=current_instructor.id).first()
 
-        if not assigned_course:
-            return {"message": "You are not authorized to add content to any courses."}, 403
+        if not course:
+            return {"message": "Course not found or you are not authorized."}, 404
 
-        # Process and add the content
+        # Clear existing content for the course
+        CourseContent.query.filter_by(course_id=course_id).delete()
+
         content_list = data["content"]
         if not isinstance(content_list, list) or len(content_list) == 0:
             return {"message": "Content data should be a non-empty list."}, 400
 
-        # Clear existing content for the course
-        CourseContent.query.filter_by(course_id=assigned_course.id).delete()
-
-        # Insert new content
         for entry in content_list:
             if "lecture_no" not in entry or "lecture_url" not in entry:
                 return {"message": "Each content entry must include lecture_no and lecture_url."}, 400
 
             new_content = CourseContent(
-                course_id=assigned_course.id,
+                course_id=course_id,
                 lecture_no=entry["lecture_no"],
                 lecture_url=entry["lecture_url"],
                 instructor_id=current_instructor.id
@@ -281,10 +311,14 @@ class Instructor_Course_API(Resource):
 
         db.session.commit()
         return {"message": "Course content updated successfully!"}, 201
+    
 
 
+# Add resource to API
 
-api.add_resource(Admin_Course_API, '/admin_course')                         # Admin can Add , Edit and Update course info
-api.add_resource(Course_Registration_API, '/course_registration')  # User can register for the courses
-api.add_resource(User_Course_API, '/user_course')                # Displays user Courses along with ID
-api.add_resource(Instructor_Course_API, '/instructor_course')            # Instructor can Add , View content | One instructor one course
+api.add_resource(Admin_Course_API, '/admin_course')                                 # Admin can Add , Edit and Update course info
+api.add_resource(Course_Registration_API, '/course_registration')                   # User can register for the courses
+api.add_resource(User_Course_API, '/user_course')                                   # Displays user Courses along with ID
+api.add_resource(Course_Details_API, '/course_details/<int:course_id>')             # Get course content for a specefic course
+api.add_resource(Instructor_Assigned_Course_API, '/instructor_assigned_course')     # Returns the assigned courses to instructor dash
+api.add_resource(Instructor_Course_Content_API, '/course_content/<int:course_id>')

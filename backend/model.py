@@ -34,6 +34,9 @@ class Instructor(db.Model):
     instructor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
 
+    
+# Can we do one thing , Adding inst to course table , inside that API , commit Instructor table
+
 class Course(db.Model):
     __tablename__ = 'course'
     id = db.Column(db.Integer, primary_key=True)
