@@ -37,7 +37,10 @@ export default {
             if (res.ok) {
                 const data = await res.json();
                 alert(data.message);
-                this.$router.push({ path: '/' });
+                this.$router.push({ path: '/login' });
+            } else {
+                alert("Account already exists, Please login!");
+                this.$router.push({ path: '/login' });
             }
         },
     },
