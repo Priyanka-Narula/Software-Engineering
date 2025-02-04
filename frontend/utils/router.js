@@ -1,8 +1,4 @@
-const Home = {
-    template: `<div><h1>Landing Page</h1></div>` 
-}
-
-
+import Home from "../pages/Home.js"
 import Login from "../pages/Login.js"
 import Student_Registration_Page from "../pages/Student_Registration_Page.js"
 import Admin_Dashboard from "../pages/Admin_Dashboard.js"
