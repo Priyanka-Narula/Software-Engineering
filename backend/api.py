@@ -5,6 +5,7 @@ from flask_restful import Api, Resource, fields, marshal_with , reqparse
 from flask_security import auth_required, current_user , roles_required
 from backend.model import * 
 from datetime import datetime
+from backend.ai.learning_assistant import LearningAssistant
 
 
 api = Api(prefix='/api')
@@ -662,6 +663,65 @@ class Announcement_API(Resource):
             db.session.rollback()
             return {"message": f"Error deleting announcement: {str(e)}"}, 500
 
+class AI_Learning_Assistant_API(Resource):
+    """
+    API for AI Learning Assistant interactions
+    
+    Endpoints:
+        POST /api/ai/learn - Ask a question to the learning assistant
+    """
+    
+    post_parser = reqparse.RequestParser()
+    post_parser.add_argument('question', type=str, required=True, 
+                           help="Question is required")
+    post_parser.add_argument('course_id', type=int, required=True, 
+                           help="Course ID is required")
+
+    @auth_required("token")
+    @roles_required("student")
+    def post(self):
+        """Get AI assistance for a learning question"""
+        args = self.post_parser.parse_args()
+        
+        try:
+            # Verify student is enrolled in the course
+            enrollment = CourseOpted.query.filter_by(
+                user_id=current_user.id,
+                course_id=args['course_id'],
+                status=True
+            ).first()
+            
+            if not enrollment:
+                return {"message": "Not enrolled in this course"}, 403
+
+            # Initialize learning assistant
+            assistant = LearningAssistant()
+            
+            # Get response
+            response = assistant.answer_question(
+                question=args['question'],
+                course_id=args['course_id'],
+                user_id=current_user.id
+            )
+            
+            if response["status"] == "success":
+                return {
+                    "message": "Response generated successfully",
+                    "response": response["response"]
+                }, 200
+            else:
+                return {
+                    "message": "Error generating response",
+                    "error": response["message"]
+                }, 500
+                
+        except Exception as e:
+            current_app.logger.error(f"AI Assistant error: {str(e)}")
+            return {
+                "message": "Error processing request",
+                "error": str(e)
+            }, 500
+
 # Add resources to API
 api.add_resource(Admin_Course_API, '/admin_course')                                 # Admin can Add, Edit and Update course info
 api.add_resource(Course_Registration_API, '/course_registration')                   # User can register for the courses
@@ -677,3 +737,4 @@ api.add_resource(Assignment_Grading_API, '/grade_assignment')                   
 api.add_resource(Announcement_API, 
                  '/announcements',
                  '/announcements/<int:announcement_id>')                           # Announcement management
+api.add_resource(AI_Learning_Assistant_API, '/ai/learn')

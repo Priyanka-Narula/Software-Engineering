@@ -5,5 +5,4 @@ venv/
 .vscode/
 *.log
 myenv/
-commands.txt
-project.txt
+tmp/
