@@ -1,11 +1,15 @@
 # backend/api.py
 
-from flask import jsonify, request, current_app as app
-from flask_restful import Api, Resource, fields, marshal_with , reqparse
-from flask_security import auth_required, current_user , roles_required
+from flask import jsonify, request, current_app
+from flask_restful import Api, Resource, fields, marshal_with, reqparse
+from flask_security import auth_required, current_user, roles_required
 from backend.model import * 
 from datetime import datetime
-from backend.ai.learning_assistant import LearningAssistant
+from backend.ai.course_content_assistant import CourseContentAssistant
+from backend.ai.programming_assistant import ProgrammingAssistant
+from backend.ai.assignment_helper import AssignmentHelper
+from backend.ai.study_planner import StudyPlanner
+import os
 
 
 api = Api(prefix='/api')
@@ -663,46 +667,41 @@ class Announcement_API(Resource):
             db.session.rollback()
             return {"message": f"Error deleting announcement: {str(e)}"}, 500
 
-class AI_Learning_Assistant_API(Resource):
-    """
-    API for AI Learning Assistant interactions
-    
-    Endpoints:
-        POST /api/ai/learn - Ask a question to the learning assistant
-    """
-    
+class AI_Course_Content_API(Resource):
     post_parser = reqparse.RequestParser()
     post_parser.add_argument('question', type=str, required=True, 
                            help="Question is required")
-    post_parser.add_argument('course_id', type=int, required=True, 
-                           help="Course ID is required")
 
     @auth_required("token")
     @roles_required("student")
-    def post(self):
-        """Get AI assistance for a learning question"""
+    def post(self, course_id):
         args = self.post_parser.parse_args()
         
-        try:
-            # Verify student is enrolled in the course
-            enrollment = CourseOpted.query.filter_by(
-                user_id=current_user.id,
-                course_id=args['course_id'],
-                status=True
-            ).first()
-            
-            if not enrollment:
-                return {"message": "Not enrolled in this course"}, 403
+        # Verify enrollment
+        enrollment = CourseOpted.query.filter_by(
+            user_id=current_user.id,
+            course_id=course_id,
+            status=True
+        ).first()
+        
+        if not enrollment:
+            return {"message": "Not enrolled in this course"}, 403
 
-            # Initialize learning assistant
-            assistant = LearningAssistant()
-            
-            # Get response
-            response = assistant.answer_question(
-                question=args['question'],
-                course_id=args['course_id'],
-                user_id=current_user.id
-            )
+        try:
+            # Create directories if they don't exist
+            course_dir = f"backend/ai/course_materials/{course_id}"
+            os.makedirs(course_dir, exist_ok=True)
+            os.makedirs("tmp/lancedb", exist_ok=True)
+
+            # Check if directory has PDFs
+            if not any(f.endswith('.pdf') for f in os.listdir(course_dir)):
+                return {
+                    "message": "No course materials available yet",
+                    "error": "No PDF files found in course directory"
+                }, 404
+
+            assistant = CourseContentAssistant(course_id)
+            response = assistant.get_response(args['question'])
             
             if response["status"] == "success":
                 return {
@@ -716,11 +715,87 @@ class AI_Learning_Assistant_API(Resource):
                 }, 500
                 
         except Exception as e:
-            current_app.logger.error(f"AI Assistant error: {str(e)}")
+            current_app.logger.error(f"Course Content Assistant error: {str(e)}")
             return {
                 "message": "Error processing request",
                 "error": str(e)
             }, 500
+
+class AI_Programming_API(Resource):
+    post_parser = reqparse.RequestParser()
+    post_parser.add_argument('question', type=str, required=True, 
+                           help="Question is required")
+
+    @auth_required("token")
+    @roles_required("student")
+    def post(self):
+        args = self.post_parser.parse_args()
+        assistant = ProgrammingAssistant()
+        response = assistant.get_response(args['question'])
+        return response
+
+class AI_Assignment_Helper_API(Resource):
+    post_parser = reqparse.RequestParser()
+    post_parser.add_argument('question', type=str, required=True, 
+                           help="Question is required")
+
+    @auth_required("token")
+    @roles_required("student")
+    def post(self, course_id, assignment_id):
+        args = self.post_parser.parse_args()
+        
+        # Verify student is enrolled in the course
+        assignment = Assignment.query.get(assignment_id)
+        if not assignment:
+            return {"message": "Assignment not found"}, 404
+            
+        # Verify assignment belongs to course
+        if assignment.course_id != course_id:
+            return {"message": "Assignment does not belong to this course"}, 400
+            
+        enrollment = CourseOpted.query.filter_by(
+            user_id=current_user.id,
+            course_id=course_id,
+            status=True
+        ).first()
+        
+        if not enrollment:
+            return {"message": "Not enrolled in this course"}, 403
+
+        try:
+            assistant = AssignmentHelper(course_id, assignment_id)
+            response = assistant.get_response(args['question'])
+            return response
+        except Exception as e:
+            current_app.logger.error(f"Assignment Helper error: {str(e)}")
+            return {
+                "message": "Error processing request",
+                "error": str(e)
+            }, 500
+
+class AI_Study_Planner_API(Resource):
+    post_parser = reqparse.RequestParser()
+    post_parser.add_argument('question', type=str, required=True, 
+                           help="Question is required")
+
+    @auth_required("token")
+    @roles_required("student")
+    def post(self, course_id):
+        args = self.post_parser.parse_args()
+        
+        # Verify enrollment
+        enrollment = CourseOpted.query.filter_by(
+            user_id=current_user.id,
+            course_id=course_id,
+            status=True
+        ).first()
+        
+        if not enrollment:
+            return {"message": "Not enrolled in this course"}, 403
+
+        assistant = StudyPlanner(course_id)
+        response = assistant.get_response(args['question'])
+        return response
 
 # Add resources to API
 api.add_resource(Admin_Course_API, '/admin_course')                                 # Admin can Add, Edit and Update course info
@@ -737,4 +812,7 @@ api.add_resource(Assignment_Grading_API, '/grade_assignment')                   
 api.add_resource(Announcement_API, 
                  '/announcements',
                  '/announcements/<int:announcement_id>')                           # Announcement management
-api.add_resource(AI_Learning_Assistant_API, '/ai/learn')
+api.add_resource(AI_Course_Content_API, '/ai/course/<int:course_id>/content')
+api.add_resource(AI_Programming_API, '/ai/programming')
+api.add_resource(AI_Assignment_Helper_API, '/ai/assignment/<int:course_id>/<int:assignment_id>/help')
+api.add_resource(AI_Study_Planner_API, '/ai/course/<int:course_id>/study')
