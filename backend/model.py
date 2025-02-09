@@ -43,6 +43,7 @@ class Course(db.Model):
     course_name = db.Column(db.String(100), nullable=False)
     instructor_id = db.Column(db.Integer, db.ForeignKey('instructor.instructor_id'), nullable=True)
     credits = db.Column(db.Integer)
+    assignments = db.relationship('Assignment', backref='course', lazy=True)
 
 class CourseContent(db.Model):
     __tablename__ = 'course_content'
@@ -59,3 +60,75 @@ class CourseOpted(db.Model):
     course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=True)
     term = db.Column(db.String(50), nullable=True)
     status = db.Column(db.Boolean, default=True)
+
+class Assignment(db.Model):
+    __tablename__ = 'assignment'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    due_date = db.Column(db.DateTime, nullable=False)
+    max_marks = db.Column(db.Float, nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    assignment_type = db.Column(db.String(20), nullable=False)  # 'subjective' or 'objective'
+    status = db.Column(db.String(20), nullable=False)  # 'draft' or 'published'
+    created_at = db.Column(db.DateTime, default=dt.now)
+
+class AssignmentSubmission(db.Model):
+    __tablename__ = 'assignment_submission'
+    id = db.Column(db.Integer, primary_key=True)
+    assignment_id = db.Column(db.Integer, db.ForeignKey('assignment.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    submission_content = db.Column(db.Text, nullable=False)
+    submitted_at = db.Column(db.DateTime, nullable=False)
+    marks = db.Column(db.Float)
+    feedback = db.Column(db.Text)
+    graded_at = db.Column(db.DateTime)
+    graded_by = db.Column(db.Integer, db.ForeignKey('user.id'))
+
+class Announcement(db.Model):
+    __tablename__ = 'announcement'
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=dt.now)
+    updated_at = db.Column(db.DateTime, default=dt.now, onupdate=dt.now)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    priority = db.Column(db.String(20), default='normal')  # 'high', 'normal', 'low'
+
+class CourseResource(db.Model):
+    __tablename__ = 'course_resource'
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    resource_type = db.Column(db.String(50), nullable=False)  # 'document', 'video', 'link'
+    resource_url = db.Column(db.String(500), nullable=False)
+    uploaded_at = db.Column(db.DateTime, default=dt.now)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+class Discussion(db.Model):
+    __tablename__ = 'discussion'
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=dt.now)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    is_closed = db.Column(db.Boolean, default=False)
+
+class DiscussionReply(db.Model):
+    __tablename__ = 'discussion_reply'
+    id = db.Column(db.Integer, primary_key=True)
+    discussion_id = db.Column(db.Integer, db.ForeignKey('discussion.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=dt.now)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+class CourseProgress(db.Model):
+    __tablename__ = 'course_progress'
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    content_id = db.Column(db.Integer, db.ForeignKey('course_content.id'), nullable=False)
+    completed_at = db.Column(db.DateTime, default=dt.now)
+    progress_percentage = db.Column(db.Float, default=0.0)

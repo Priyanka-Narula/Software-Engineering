@@ -4,6 +4,7 @@ from flask import jsonify, request, current_app as app
 from flask_restful import Api, Resource, fields, marshal_with , reqparse
 from flask_security import auth_required, current_user , roles_required
 from backend.model import * 
+from datetime import datetime
 
 
 api = Api(prefix='/api')
@@ -17,8 +18,8 @@ class Admin_Course_API(Resource):
     post_parser.add_argument('credits', type=int, required=True, help="Credits are required")
     #post_parser.add_argument('instructor_id', type=int, required=True, help="Instructor ID is required")
 
-    # @auth_required("token") 
-    # @roles_required("admin")
+    @auth_required("token")
+    @roles_required("admin")
     def post(self):
         args = self.post_parser.parse_args()
         course_name = args['course_name']
@@ -36,17 +37,20 @@ class Admin_Course_API(Resource):
             #instructor_id = args['instructor_id']
         )
 
-        db.session.add(new_course)
-        db.session.commit()
-
-        return {
-            "message": "Course added successfully",
-            "course": {
-                "id": new_course.id,
-                "course_name": new_course.course_name,
-                "credits": new_course.credits
-            }
-        }, 201
+        try:
+            db.session.add(new_course)
+            db.session.commit()
+            return {
+                "message": "Course added successfully",
+                "course": {
+                    "id": new_course.id,
+                    "course_name": new_course.course_name,
+                    "credits": new_course.credits
+                }
+            }, 201
+        except Exception as e:
+            db.session.rollback()
+            return {"message": f"Error creating course: {str(e)}"}, 500
 
 
     get_parser = reqparse.RequestParser()
@@ -313,12 +317,363 @@ class Instructor_Course_Content_API(Resource):
         return {"message": "Course content updated successfully!"}, 201
     
 
+# Assignment Management
+class Assignment_API(Resource):
+    post_parser = reqparse.RequestParser()
+    post_parser.add_argument('title', type=str, required=True, help="Assignment title is required")
+    post_parser.add_argument('description', type=str, required=True, help="Assignment description is required")
+    post_parser.add_argument('due_date', type=str, required=True, help="Due date is required")
+    post_parser.add_argument('max_marks', type=int, required=True, help="Maximum marks is required")
+    post_parser.add_argument('course_id', type=int, required=True, help="Course ID is required")
+    post_parser.add_argument('assignment_type', type=str, required=True, 
+                            choices=['subjective', 'objective'],
+                            help="Assignment type must be either 'subjective' or 'objective'")
 
-# Add resource to API
+    @auth_required("token")
+    @roles_required("instructor")
+    def post(self):
+        args = self.post_parser.parse_args()
+        current_instructor = current_user
+        
+        # Verify instructor is assigned to the course
+        course = Course.query.filter_by(id=args['course_id'], instructor_id=current_instructor.id).first()
+        if not course:
+            return {"message": "You are not authorized to create assignments for this course"}, 403
 
-api.add_resource(Admin_Course_API, '/admin_course')                                 # Admin can Add , Edit and Update course info
+        new_assignment = Assignment(
+            title=args['title'],
+            description=args['description'],
+            due_date=datetime.strptime(args['due_date'], '%Y-%m-%d'),
+            max_marks=args['max_marks'],
+            course_id=args['course_id'],
+            assignment_type=args['assignment_type'],
+            status='published'
+        )
+
+        db.session.add(new_assignment)
+        db.session.commit()
+
+        return {
+            "message": "Assignment created successfully",
+            "assignment": {
+                "id": new_assignment.id,
+                "title": new_assignment.title,
+                "due_date": new_assignment.due_date.strftime('%Y-%m-%d'),
+                "status": new_assignment.status
+            }
+        }, 201
+
+    @auth_required("token")
+    def get(self):
+        course_id = request.args.get('course_id', type=int)
+        if not course_id:
+            return {"message": "Course ID is required"}, 400
+
+        assignments = Assignment.query.filter_by(course_id=course_id).all()
+        return {
+            "assignments": [{
+                "id": assignment.id,
+                "title": assignment.title,
+                "description": assignment.description,
+                "due_date": assignment.due_date.strftime('%Y-%m-%d'),
+                "max_marks": assignment.max_marks,
+                "status": assignment.status
+            } for assignment in assignments]
+        }, 200
+
+
+# Assignment Submission
+class Assignment_Submission_API(Resource):
+    post_parser = reqparse.RequestParser()
+    post_parser.add_argument('assignment_id', type=int, required=True, help="Assignment ID is required")
+    post_parser.add_argument('submission_content', type=str, required=True, help="Submission content is required")
+
+    @auth_required("token")
+    @roles_required("student")
+    def post(self):
+        args = self.post_parser.parse_args()
+        current_student = current_user
+        
+        # Check if assignment exists and is still open
+        assignment = Assignment.query.get(args['assignment_id'])
+        if not assignment:
+            return {"message": "Assignment not found"}, 404
+            
+        if datetime.now() > assignment.due_date:
+            return {"message": "Assignment submission deadline has passed"}, 400
+
+        # Check if student is enrolled in the course
+        enrollment = CourseOpted.query.filter_by(
+            user_id=current_student.id,
+            course_id=assignment.course_id,
+            status=True
+        ).first()
+        
+        if not enrollment:
+            return {"message": "You are not enrolled in this course"}, 403
+
+        # Check for existing submission
+        existing_submission = AssignmentSubmission.query.filter_by(
+            assignment_id=args['assignment_id'],
+            student_id=current_student.id
+        ).first()
+
+        if existing_submission:
+            existing_submission.submission_content = args['submission_content']
+            existing_submission.submitted_at = datetime.now()
+        else:
+            new_submission = AssignmentSubmission(
+                assignment_id=args['assignment_id'],
+                student_id=current_student.id,
+                submission_content=args['submission_content'],
+                submitted_at=datetime.now()
+            )
+            db.session.add(new_submission)
+
+        db.session.commit()
+
+        return {"message": "Assignment submitted successfully"}, 201
+
+    @auth_required("token")
+    def get(self, assignment_id):
+        if 'instructor' in [role.name for role in current_user.roles]:
+            # Instructor view - all submissions for an assignment
+            submissions = AssignmentSubmission.query.filter_by(assignment_id=assignment_id).all()
+            return {
+                "submissions": [{
+                    "id": submission.id,
+                    "student_id": submission.student_id,
+                    "student_name": User.query.get(submission.student_id).name,
+                    "submitted_at": submission.submitted_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    "marks": submission.marks,
+                    "feedback": submission.feedback
+                } for submission in submissions]
+            }, 200
+        else:
+            # Student view - their own submission
+            submission = AssignmentSubmission.query.filter_by(
+                assignment_id=assignment_id,
+                student_id=current_user.id
+            ).first()
+            
+            if not submission:
+                return {"message": "No submission found"}, 404
+
+            return {
+                "submission": {
+                    "id": submission.id,
+                    "submitted_at": submission.submitted_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    "marks": submission.marks,
+                    "feedback": submission.feedback
+                }
+            }, 200
+
+
+# Assignment Grading
+class Assignment_Grading_API(Resource):
+    post_parser = reqparse.RequestParser()
+    post_parser.add_argument('submission_id', type=int, required=True, help="Submission ID is required")
+    post_parser.add_argument('marks', type=float, required=True, help="Marks are required")
+    post_parser.add_argument('feedback', type=str, required=True, help="Feedback is required")
+
+    @auth_required("token")
+    @roles_required("instructor")
+    def post(self):
+        args = self.post_parser.parse_args()
+        submission = AssignmentSubmission.query.get(args['submission_id'])
+        
+        if not submission:
+            return {"message": "Submission not found"}, 404
+
+        # Get the assignment and its course
+        assignment = Assignment.query.get(submission.assignment_id)
+        if not assignment:
+            return {"message": "Assignment not found"}, 404
+
+        # Get the course and verify instructor
+        course = Course.query.get(assignment.course_id)
+        if not course or course.instructor_id != current_user.id:
+            return {"message": "You are not authorized to grade this submission"}, 403
+
+        # Verify marks are within range
+        if args['marks'] > assignment.max_marks:
+            return {"message": f"Marks cannot exceed maximum marks ({assignment.max_marks})"}, 400
+
+        submission.marks = args['marks']
+        submission.feedback = args['feedback']
+        submission.graded_at = datetime.now()
+        submission.graded_by = current_user.id
+
+        db.session.commit()
+
+        return {"message": "Submission graded successfully"}, 200
+
+class Announcement_API(Resource):
+    """
+    API Resource for managing course announcements.
+    
+    Endpoints:
+        POST /announcements - Create a new announcement
+        GET /announcements?course_id=<id> - Get announcements for a course
+        PUT /announcements - Update an announcement
+        DELETE /announcements/<announcement_id> - Delete an announcement
+    
+    Authorization:
+        - POST/PUT/DELETE requires instructor role
+        - GET requires course enrollment or instructor role
+    """
+    
+    post_parser = reqparse.RequestParser()
+    post_parser.add_argument('course_id', type=int, required=True, 
+                           help="Course ID is required")
+    post_parser.add_argument('title', type=str, required=True, 
+                           help="Announcement title is required")
+    post_parser.add_argument('content', type=str, required=True, 
+                           help="Announcement content is required")
+    post_parser.add_argument('priority', type=str, required=False, 
+                           default='normal', 
+                           choices=['high', 'normal', 'low'],
+                           help="Priority must be one of: high, normal, low")
+
+    put_parser = reqparse.RequestParser()
+    put_parser.add_argument('announcement_id', type=int, required=True, 
+                          help="Announcement ID is required")
+    put_parser.add_argument('title', type=str, required=False)
+    put_parser.add_argument('content', type=str, required=False)
+    put_parser.add_argument('priority', type=str, required=False, 
+                          choices=['high', 'normal', 'low'])
+
+    @auth_required("token")
+    @roles_required("instructor")
+    def post(self):
+        """Create a new announcement for a course."""
+        args = self.post_parser.parse_args()
+        
+        # Verify instructor is assigned to the course
+        course = Course.query.get(args['course_id'])
+        if not course or course.instructor_id != current_user.id:
+            return {"message": "Not authorized to create announcements for this course"}, 403
+
+        try:
+            announcement = Announcement(
+                course_id=args['course_id'],
+                title=args['title'],
+                content=args['content'],
+                priority=args['priority'],
+                created_by=current_user.id
+            )
+            
+            db.session.add(announcement)
+            db.session.commit()
+
+            return {
+                "message": "Announcement created successfully",
+                "announcement": {
+                    "id": announcement.id,
+                    "title": announcement.title,
+                    "created_at": announcement.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                }
+            }, 201
+        except Exception as e:
+            db.session.rollback()
+            return {"message": f"Error creating announcement: {str(e)}"}, 500
+
+    @auth_required("token")
+    def get(self):
+        """Get announcements for a course."""
+        course_id = request.args.get('course_id', type=int)
+        if not course_id:
+            return {"message": "Course ID is required"}, 400
+
+        try:
+            # Check if user is enrolled in the course or is the instructor
+            if 'student' in [role.name for role in current_user.roles]:
+                enrollment = CourseOpted.query.filter_by(
+                    user_id=current_user.id,
+                    course_id=course_id,
+                    status=True
+                ).first()
+                if not enrollment:
+                    return {"message": "Not enrolled in this course"}, 403
+
+            announcements = Announcement.query.filter_by(course_id=course_id)\
+                .order_by(Announcement.created_at.desc()).all()
+
+            return {
+                "announcements": [{
+                    "id": ann.id,
+                    "title": ann.title,
+                    "content": ann.content,
+                    "priority": ann.priority,
+                    "created_at": ann.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    "created_by": User.query.get(ann.created_by).name
+                } for ann in announcements]
+            }, 200
+        except Exception as e:
+            return {"message": f"Error fetching announcements: {str(e)}"}, 500
+
+    @auth_required("token")
+    @roles_required("instructor")
+    def put(self):
+        """Update an existing announcement."""
+        args = self.put_parser.parse_args()
+        
+        try:
+            announcement = Announcement.query.get(args['announcement_id'])
+            if not announcement:
+                return {"message": "Announcement not found"}, 404
+
+            # Verify instructor owns the announcement
+            course = Course.query.get(announcement.course_id)
+            if not course or course.instructor_id != current_user.id:
+                return {"message": "Not authorized to update this announcement"}, 403
+
+            if args['title']:
+                announcement.title = args['title']
+            if args['content']:
+                announcement.content = args['content']
+            if args['priority']:
+                announcement.priority = args['priority']
+
+            db.session.commit()
+            return {"message": "Announcement updated successfully"}, 200
+        except Exception as e:
+            db.session.rollback()
+            return {"message": f"Error updating announcement: {str(e)}"}, 500
+
+    @auth_required("token")
+    @roles_required("instructor")
+    def delete(self, announcement_id):
+        """Delete an announcement."""
+        try:
+            announcement = Announcement.query.get(announcement_id)
+            if not announcement:
+                return {"message": "Announcement not found"}, 404
+
+            # Verify instructor owns the announcement
+            course = Course.query.get(announcement.course_id)
+            if not course or course.instructor_id != current_user.id:
+                return {"message": "Not authorized to delete this announcement"}, 403
+
+            db.session.delete(announcement)
+            db.session.commit()
+            return {"message": "Announcement deleted successfully"}, 200
+        except Exception as e:
+            db.session.rollback()
+            return {"message": f"Error deleting announcement: {str(e)}"}, 500
+
+# Add resources to API
+api.add_resource(Admin_Course_API, '/admin_course')                                 # Admin can Add, Edit and Update course info
 api.add_resource(Course_Registration_API, '/course_registration')                   # User can register for the courses
-api.add_resource(User_Course_API, '/user_course')                                   # Displays user Courses along with ID
-api.add_resource(Course_Details_API, '/course_details/<int:course_id>')             # Get course content for a specefic course
+api.add_resource(User_Course_API, '/user_course')                                  # Displays user Courses along with ID
+api.add_resource(Course_Details_API, '/course_details/<int:course_id>')            # Get course content for a specific course
 api.add_resource(Instructor_Assigned_Course_API, '/instructor_assigned_course')     # Returns the assigned courses to instructor dash
-api.add_resource(Instructor_Course_Content_API, '/course_content/<int:course_id>')
+api.add_resource(Instructor_Course_Content_API, '/course_content/<int:course_id>')  # Course content management
+api.add_resource(Assignment_API, '/assignments')                                    # Assignment management
+api.add_resource(Assignment_Submission_API, 
+                 '/assignment_submissions', 
+                 '/assignment_submissions/<int:assignment_id>')                     # Assignment submission handling
+api.add_resource(Assignment_Grading_API, '/grade_assignment')                      # Assignment grading
+api.add_resource(Announcement_API, 
+                 '/announcements',
+                 '/announcements/<int:announcement_id>')                           # Announcement management
