@@ -1,20 +1,23 @@
 export default {
   template: `
-  <div>
-    <h2>Instructor Dashboard</h2>
-
-    <!-- Courses Section -->
-    <div style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 20px;">
-      <div v-for="course in assigned_course" :key="course.course_id" 
-           @click="openCourseContent(course.course_id)" 
-           style="border: 1px solid #ddd; border-radius: 8px; padding: 20px; background: #fff; width: 200px; cursor: pointer;">
-        <h3 style="font-size: 18px; color: #333;">{{ course.course_name }}</h3>
-        <p style="color: #777;">Credits: {{ course.credits }}</p>
+  <div class="container mt-4">
+      <h2 class="mb-3 text-primary fw-bold">Instructor Dashboard</h2>
+  
+      <!-- Courses Section -->
+      <div class="d-flex flex-wrap gap-3 px-3">
+          <div v-for="course in assigned_course" :key="course.course_id" 
+               @click="openCourseContent(course.course_id)" 
+               class="card shadow-sm p-3 border-0 rounded cursor-pointer" 
+               style="width: 220px; transition: transform 0.2s; cursor: pointer;"
+               @mouseover="e => e.currentTarget.style.transform='scale(1.05)'"
+               @mouseleave="e => e.currentTarget.style.transform='scale(1)'">
+              
+              <h5 class="text-dark fw-bold mb-2">{{ course.course_name }}</h5>
+              <p class="text-secondary">Credits: {{ course.credits }}</p>
+          </div>
       </div>
-    </div>
   </div>
   `,
-
   data() {
     return {
       assigned_course: [],

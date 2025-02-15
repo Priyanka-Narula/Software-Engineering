@@ -1,13 +1,20 @@
 export default {
     template: `
-    <div style="margin-top: 20px; display: flex; flex-wrap: wrap; gap: 20px; padding: 0 20px;">
-        <!-- Courses Section -->
-        <div style="flex: 2; display: flex; flex-wrap: wrap; gap: 20px;">
-            <div v-for="course in my_courses" :key="course.course_id" @click="openCourseDetails(course.course_id)"
-                style="border: 1px solid #ddd; border-radius: 8px; padding: 20px; background: #fff; width: 200px; cursor: pointer;">
-                <h3 style="font-size: 18px; color: #333;">{{ course.course_name }}</h3>
-                <p style="color: #777;">Credits: {{ course.credits }}</p>
-                <p style="color: #777;">Term: {{ course.term }}</p>
+    <div class="container mt-4">
+        <div class="d-flex flex-wrap gap-3 px-3">
+            <!-- Courses Section -->
+            <div class="d-flex flex-wrap gap-3 flex-grow-1">
+                <div v-for="course in my_courses" :key="course.course_id" 
+                    @click="openCourseDetails(course.course_id)" 
+                    class="card shadow-sm p-3 border-0 rounded cursor-pointer" 
+                    style="width: 220px; transition: transform 0.2s; cursor: pointer;"
+                    @mouseover="e => e.currentTarget.style.transform='scale(1.05)'"
+                    @mouseleave="e => e.currentTarget.style.transform='scale(1)'">
+                    
+                    <h5 class="text-dark fw-bold mb-2">{{ course.course_name }}</h5>
+                    <p class="text-secondary mb-1">Credits: {{ course.credits }}</p>
+                    <p class="text-secondary">Term: {{ course.term }}</p>
+                </div>
             </div>
         </div>
     </div>
