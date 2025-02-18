@@ -816,3 +816,74 @@ api.add_resource(AI_Course_Content_API, '/ai/course/<int:course_id>/content')
 api.add_resource(AI_Programming_API, '/ai/programming')
 api.add_resource(AI_Assignment_Helper_API, '/ai/assignment/<int:course_id>/<int:assignment_id>/help')
 api.add_resource(AI_Study_Planner_API, '/ai/course/<int:course_id>/study')
+
+
+
+class Instructor_Assignment_API(Resource):
+    @auth_required("token")
+    def get(self, course_id):
+        """Retrieve all assignments for a given course."""
+        current_instructor = current_user
+        course = Course.query.filter_by(id=course_id, instructor_id=current_instructor.id).first()
+
+        if not course:
+            return {"message": "Course not found or you are not authorized."}, 404
+
+        assignments = Assignment.query.filter_by(course_id=course_id).all()
+
+        structured_assignments = [
+            {
+                "id": a.id,
+                "title": a.title,
+                "description": a.description,
+                "due_date": a.due_date.strftime("%Y-%m-%d %H:%M:%S"),
+                "max_marks": a.max_marks,
+                "assignment_type": a.assignment_type,
+                "status": a.status,
+                "created_at": a.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            for a in assignments
+        ]
+
+        return {"assignments": structured_assignments}, 200
+
+    @auth_required("token")
+    def post(self, course_id):
+        """Create or update assignments for a given course."""
+        current_instructor = current_user
+        data = request.get_json()
+
+        if not data or "assignments" not in data:
+            return {"message": "Invalid or missing assignment data."}, 400
+
+        course = Course.query.filter_by(id=course_id, instructor_id=current_instructor.id).first()
+        if not course:
+            return {"message": "Course not found or you are not authorized."}, 404
+
+        # Clear existing assignments
+        Assignment.query.filter_by(course_id=course_id).delete()
+
+        assignment_list = data["assignments"]
+        if not isinstance(assignment_list, list) or len(assignment_list) == 0:
+            return {"message": "Assignments data should be a non-empty list."}, 400
+
+        for entry in assignment_list:
+            if not all(k in entry for k in ["title", "description", "due_date", "max_marks", "assignment_type", "status"]):
+                return {"message": "Each assignment must include title, description, due_date, max_marks, assignment_type, and status."}, 400
+
+            new_assignment = Assignment(
+                title=entry["title"],
+                description=entry["description"],
+                due_date=dt.strptime(entry["due_date"], "%Y-%m-%d %H:%M:%S"),
+                max_marks=entry["max_marks"],
+                course_id=course_id,
+                assignment_type=entry["assignment_type"],
+                status=entry["status"],
+                created_at=dt.now()
+            )
+            db.session.add(new_assignment)
+
+        db.session.commit()
+        return {"message": "Assignments updated successfully!"}, 201
+
+api.add_resource(Instructor_Assignment_API, '/instructor_assignment_api/<int:course_id>') 

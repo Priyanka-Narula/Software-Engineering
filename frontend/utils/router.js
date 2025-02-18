@@ -7,6 +7,7 @@ import Student_Dashboard from "../pages/Student_Dashboard.js"
 import Instructor_Registration_Page from "../pages/Instructor_Registration_Page.js"
 import Course_Details from "../pages/Course_Details.js"
 import Course_Content from "../pages/Course_Content.js" 
+import Course_Assigment from "../pages/Course_Assigment.js"
 
 const routes = [
     
@@ -19,7 +20,9 @@ const routes = [
     { path: '/instructor_registration_page', component: Instructor_Registration_Page , name:'Instructor_Registration_Page'},
     //{ path: '/course_details/:id', component: Course_Details, name: 'Course_Details' }, 
     { path: '/course_details/:course_id', component: Course_Details, name: 'Course_Details' },
-    { path: '/course_content/:course_id', component: Course_Content, name: 'CourseContent' }
+    { path: '/course_content/:course_id', component: Course_Content, name: 'CourseContent' },
+    { path: '/course_assigment/:course_id', component: Course_Assigment, name: 'Course_Assigment' },
+    
    
     
 ]
